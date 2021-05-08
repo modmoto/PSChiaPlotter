@@ -1,21 +1,27 @@
 function Get-CurrentChiaProcess{
     [CmdletBinding()]
-    param()
+    param(
+        [Parameter(Mandatory)]
+        [int[]]$ChiaPID
+    )
 
-    $ChiaPID = 10832
-    $LogFile = 
+    foreach ($ID in $ChiaPID){
+        $QueryString += "OR IDProcess=$ID "
+    }
 
-    DO {
-        $Performance = Get-CimInstance -Query "Select workingSetPrivate,PercentProcessorTime,IDProcess FROM Win32_PerfFormattedData_PerfProc_Process WHERE NAME='_Total' OR IDProcess=$ChiaPID" |
-            sort IDProcess
-        if ($Performance[1].PercentProcessorTime -ne 0){
-            $CPUPer = ($Performance[1].PercentProcessorTime / $Performance[0].PercentProcessorTime) * 100
+    $Performance = Get-CimInstance -Query "Select workingSetPrivate,PercentProcessorTime,IDProcess FROM Win32_PerfFormattedData_PerfProc_Process WHERE NAME='_Total' $QueryString"
+    $TotalCPU = $Performance | where {$_.Name -eq '_Total'}
+    $ChiaProcesses = $Performance | where {$_.Name -ne '_Total'}
+    foreach ($process in $ChiaProcesses){
+        if ($process.PercentProcessorTime -ne 0){
+            $CPUPer = ($process.PercentProcessorTime / $TotalCPU.PercentProcessorTime) * 100
+            $RoundedCPU = [math]::Round($CPUPer,2)
         }
         else{$CPUPer = 0}
-        $CPUPer
-        sleep 10
-        $Processes = $null
-        $Processes = Get-Process -Id $ChiaPID -ErrorAction SilentlyContinue
+
+        [PSCustomObject]@{
+            ChiaPID = $process.IDProcess
+            CPUPercent = $RoundedCPU
+        }
     }
-    while ($Processes)
 }
